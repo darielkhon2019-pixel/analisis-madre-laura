@@ -39,12 +39,8 @@ def descargar():
             url = f"https://madre-laura.edu.co/sges/index.php?reporte=1&idg={idg}&grupo={grupo}&per={periodo}"
             filename = base_dir / f"Notas_grupo_{grupo}_per{periodo}.xlsx"
             
-            # Si ya existe, lo saltamos (ahorra tiempo y datos)
-            if filename.exists():
-                print(f"⏭️ Ya existe: {filename.name}")
-                continue
-                
-            print(f"📥 Descargando: {grupo} - P{periodo}...")
+            # YA NO HAY 'if filename.exists(): continue' — Siempre descargamos
+            print(f"📥 Descargando/Actualizando: {grupo} - P{periodo}...")
             try:
                 res = session.get(url, timeout=30)
                 
@@ -52,7 +48,7 @@ def descargar():
                 if res.status_code == 200 and res.content[:2] == b'PK':
                     with open(filename, "wb") as f:
                         f.write(res.content)
-                    print(f"✅ Guardado: {filename.name}")
+                    print(f"✅ Guardado/Actualizado: {filename.name}")
                 else:
                     print(f"⚠️ No es un Excel válido (posiblemente sin notas o cookie expirada). Status: {res.status_code}")
             except Exception as e:
