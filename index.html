@@ -27,19 +27,19 @@
           padding: 1.25rem; margin-bottom: 1.25rem; }
   .card h2 { font-size: 1rem; margin: 0 0 1rem; color: var(--azul); }
   
-  /* Dropzone */
-  #dropzone { border: 2px dashed var(--borde); border-radius: 8px; padding: 1.5rem;
-              text-align: center; color: #64748b; cursor: pointer; transition: .15s; }
-  #dropzone.hover { border-color: var(--azul); background: var(--azul-claro); }
-  #dropzone strong { color: var(--azul); }
-  
-  /* UI general */
+  /* Botones y Dropzone */
   .row { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
   label { font-weight: 600; font-size: .85rem; }
   select, button { font-size: .9rem; padding: .45rem .7rem; border-radius: 6px;
                    border: 1px solid var(--borde); background: #fff; }
-  button.primary { background: var(--azul); color: #fff; border: 0; cursor: pointer; }
+  button.primary { background: var(--azul); color: #fff; border: 0; cursor: pointer; transition: .2s; }
   button.primary:hover { background: var(--azul-hover); }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  
+  #dropzone { border: 2px dashed var(--borde); border-radius: 8px; padding: 1.5rem;
+              text-align: center; color: #64748b; cursor: pointer; transition: .15s; margin-top: 1rem; }
+  #dropzone.hover { border-color: var(--azul); background: var(--azul-claro); }
+  #dropzone strong { color: var(--azul); }
   
   /* Métricas */
   .metricas { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem; }
@@ -106,6 +106,12 @@
                        padding: .1rem .4rem; border-radius: 4px; font-size: .75rem;
                        margin: .15rem .25rem .15rem 0; }
   .hidden { display: none !important; }
+  
+  /* Loader */
+  .loader { display: inline-block; width: 1rem; height: 1rem; border: 2px solid var(--borde);
+            border-top-color: var(--azul); border-radius: 50%; animation: spin 1s linear infinite;
+            vertical-align: middle; margin-right: .5rem; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -114,6 +120,11 @@
   <div>
     <h1>Análisis de Notas — I.E. Madre Laura</h1>
     <div class="sub">Carga de planillas por período · Grupos 601–1102</div>
+  </div>
+  <div>
+    <button id="btnRecargar" class="primary" style="background:#fff; color:var(--azul); font-size:.85rem;">
+      🔄 Recargar datos
+    </button>
   </div>
 </header>
 
@@ -136,14 +147,20 @@
   <div class="card">
     <h2>2. Cargar planillas Excel</h2>
     <p style="font-size:.85rem;color:#475569;margin-top:0;">
-      Arrastra los archivos .xlsx. Puedes seleccionar <strong>múltiples períodos y múltiples grupos</strong> a la vez.
+      La página intentará cargar los archivos automáticamente desde el servidor. 
+      Si falla o quieres probar con archivos locales, puedes arrastrarlos manualmente.
     </p>
+    
+    <div id="statusAuto" style="margin-bottom: 1rem; font-size: .85rem; color: #475569;">
+      <span class="loader"></span> Conectando con el repositorio...
+    </div>
+
     <div id="dropzone">
-      <p style="margin:0 0 .5rem;"><strong>Arrastra aquí</strong> los archivos Excel</p>
+      <p style="margin:0 0 .5rem;"><strong>Arrastra aquí</strong> archivos Excel (opcional)</p>
       <p style="margin:0;font-size:.8rem;">o haz clic para buscarlos en tu PC</p>
       <input type="file" id="fileInput" accept=".xlsx,.xls" multiple class="hidden">
     </div>
-    <div id="fileList" style="margin-top:.75rem;font-size:.85rem;"></div>
+    <div id="fileList" style="margin-top:.75rem;font-size:.85rem; max-height: 150px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; padding: 0.5rem; background: #fafafa;"></div>
   </div>
 
   <div id="resultados" class="hidden">
@@ -223,8 +240,69 @@ $("grupoSelect").addEventListener("change", (e) => {
   renderizarGrupo();
 });
 
+// Botón recargar
+$("btnRecargar").addEventListener("click", () => {
+  cargarDatosAutomatico();
+});
+
 /* ============================================================
-   DROPZONE
+   CARGA AUTOMÁTICA DESDE EL REPOSITORIO
+   ============================================================ */
+async function cargarDatosAutomatico() {
+  const status = $("statusAuto");
+  const lista = $("fileList");
+  
+  status.innerHTML = `<span class="loader"></span> Conectando con el repositorio...`;
+  lista.innerHTML = "";
+  archivosPorGrupo = {};
+  $("resultados").classList.add("hidden");
+
+  const grupos = ["601","602","603","701","702","703","801","802","803","901","902","903","1001","1002","1101","1102"];
+  const periodos = [1, 2, 3, 4];
+  let encontrados = 0;
+
+  for (const g of grupos) {
+    for (const p of periodos) {
+      // Asume que los archivos están en data/raw/ en el mismo nivel que index.html
+      const url = `data/raw/Notas_grupo_${g}_per${p}.xlsx`;
+      try {
+        // Usamos cache: 'no-store' para obligar al navegador a bajar la versión más reciente
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) continue; // Si no existe el archivo, ignorar
+        
+        const buf = await res.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const parsed = parsearWorkbook(wb, url);
+        
+        if (parsed) {
+          if (!archivosPorGrupo[parsed.grupo]) archivosPorGrupo[parsed.grupo] = {};
+          archivosPorGrupo[parsed.grupo][parsed.periodo] = parsed;
+          encontrados++;
+          lista.innerHTML += `<div style="color:#16a34a;">✅ Cargado: Grupo ${parsed.grupo} · P${parsed.periodo}</div>`;
+        }
+      } catch (e) {
+        // Archivo no encontrado, ignorar
+      }
+    }
+  }
+
+  if (encontrados > 0) {
+    const gruposCargados = Object.keys(archivosPorGrupo);
+    gruposCargados.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const sel = $("grupoSelect");
+    sel.innerHTML = gruposCargados.map(g => `<option value="${g}">Grupo ${g}</option>`).join("");
+    grupoActivo = gruposCargados[0];
+    
+    $("resultados").classList.remove("hidden");
+    renderizarGrupo();
+    status.innerHTML = `<span style="color:#16a34a;font-weight:bold;">✅ ${encontrados} archivos cargados automáticamente.</span>`;
+  } else {
+    status.innerHTML = `<span style="color:#dc2626;font-weight:bold;">⚠️ No se encontraron archivos en el servidor. Asegúrate de haber ejecutado GitHub Actions.</span>`;
+  }
+}
+
+/* ============================================================
+   CARGA MANUAL (DROPZONE DE RESPALDO)
    ============================================================ */
 const dz = $("dropzone"), fi = $("fileInput");
 dz.addEventListener("click", () => fi.click());
@@ -235,8 +313,7 @@ fi.addEventListener("change", () => manejarArchivos(fi.files));
 
 async function manejarArchivos(files) {
   const lista = $("fileList");
-  archivosPorGrupo = {};
-  lista.innerHTML = "";
+  lista.innerHTML = "Procesando archivos locales...<br>";
 
   for (const file of files) {
     if (!/\.(xlsx|xls)$/i.test(file.name)) {
@@ -258,7 +335,7 @@ async function manejarArchivos(files) {
         continue;
       }
       archivosPorGrupo[g][parsed.periodo] = parsed;
-      lista.innerHTML += `<div style="color:#16a34a;">✅ ${file.name} → Grupo ${g} · Período ${parsed.periodo} · ${parsed.notas.length} estudiantes</div>`;
+      lista.innerHTML += `<div style="color:#16a34a;">✅ Local: ${file.name} → Grupo ${g} · P${parsed.periodo}</div>`;
     } catch (e) {
       lista.innerHTML += `<div style="color:#dc2626;">❌ ${file.name}: ${e.message}</div>`;
     }
@@ -266,11 +343,11 @@ async function manejarArchivos(files) {
 
   const grupos = Object.keys(archivosPorGrupo);
   if (grupos.length) {
-    // Ordenar numéricamente (601, 602, 1001)
     grupos.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
     const sel = $("grupoSelect");
     sel.innerHTML = grupos.map(g => `<option value="${g}">Grupo ${g}</option>`).join("");
-    grupoActivo = grupos[0];
+    // Mantiene el grupo activo si ya existía, sino toma el primero
+    if (!grupoActivo || !grupos.includes(grupoActivo)) grupoActivo = grupos[0];
     
     $("resultados").classList.remove("hidden");
     renderizarGrupo();
@@ -420,8 +497,7 @@ function analizarGrupo(grupo, periodosData, periodoActual) {
       }
       const suma = vals.reduce((a,b)=>a+b, 0);
       
-      // PROMEDIO CORRECTO: suma dividida entre el período actual (no la cantidad de notas individuales)
-      // Ej: si estamos en P2, se divide entre 2.
+      // PROMEDIO CORRECTO: suma dividida entre el período actual
       acumuladas[m] = vals.length ? suma / periodoActual : null;
       
       acumuladas[m + "__suma"] = suma;
@@ -644,6 +720,11 @@ function renderizarGrupo() {
     if ($(tabId)) $(tabId).classList.add("active");
   }
 }
+
+// Iniciar carga automática al abrir la página
+document.addEventListener("DOMContentLoaded", () => {
+  cargarDatosAutomatico();
+});
 </script>
 </body>
 </html>
