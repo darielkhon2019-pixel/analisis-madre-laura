@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Análisis de Notas — I.E. Madre Laura</title>
+<style>
+  :root {
+    --azul: #1e3a8a; --azul-claro: #e0e7ff; --azul-hover: #172554;
+    --gris: #f1f5f9; --borde: #cbd5e1; --texto: #0f172a;
+    --rojo: #dc2626; --ambar: #d97706; --verde: #16a34a; --azul-metrica: #2563eb;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         margin: 0; background: #f8fafc; color: var(--texto); font-size: 14px; }
+  
+  /* Header */
+  header { background: var(--azul); color: #fff; padding: 1rem 1.5rem;
+           display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .5rem; }
+  header h1 { font-size: 1.1rem; margin: 0; font-weight: 600; }
+  header .sub { font-size: .8rem; opacity: .85; }
+  
+  main { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+  
+  /* Cards */
+  .card { background: #fff; border: 1px solid var(--borde); border-radius: 8px;
+          padding: 1.25rem; margin-bottom: 1.25rem; }
+  .card h2 { font-size: 1rem; margin: 0 0 1rem; color: var(--azul); }
+  
+  /* Dropzone */
+  #dropzone { border: 2px dashed var(--borde); border-radius: 8px; padding: 1.5rem;
+              text-align: center; color: #64748b; cursor: pointer; transition: .15s; }
+  #dropzone.hover { border-color: var(--azul); background: var(--azul-claro); }
+  #dropzone strong { color: var(--azul); }
+  
+  /* UI general */
+  .row { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
+  label { font-weight: 600; font-size: .85rem; }
+  select, button { font-size: .9rem; padding: .45rem .7rem; border-radius: 6px;
+                   border: 1px solid var(--borde); background: #fff; }
+  button.primary { background: var(--azul); color: #fff; border: 0; cursor: pointer; }
+  button.primary:hover { background: var(--azul-hover); }
+  
+  /* Métricas */
+  .metricas { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem; }
+  .metrica { background: var(--gris); border-radius: 6px; padding: .9rem; text-align: center; }
+  .metrica .num { font-size: 1.8rem; font-weight: 700; line-height: 1; }
+  .metrica .lbl { font-size: .72rem; color: #64748b; margin-top: .3rem;
+                  text-transform: uppercase; letter-spacing: .03em; }
+  .num.rojo { color: var(--rojo); } .num.ambar { color: var(--ambar); }
+  .num.verde { color: var(--verde); } .num.azul { color: var(--azul-metrica); }
+  
+  /* Tablas */
+  .tabla-wrap { overflow-x: auto; max-height: 70vh; overflow-y: auto; border: 1px solid var(--borde); border-radius: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+  th, td { border: 1px solid var(--borde); padding: .35rem .4rem; text-align: center; white-space: nowrap; }
+  th { background: var(--azul-claro); color: var(--azul); font-weight: 600; position: sticky; top: 0; z-index: 10; }
+  td.nombre { text-align: left; min-width: 180px; }
+  td.bajo { background: #fee2e2; color: #991b1b; font-weight: 600; }
+  td.basico { background: #fef3c7; }
+  td.alto { background: #dcfce7; }
+  td.superior { background: #dbeafe; font-weight: 600; }
+  td.pendiente { background: #fca5a5; color: #7f1d1d; font-weight: 700; }
+  
+  /* Alertas y avisos */
+  .alerta { background: #fef2f2; border-left: 4px solid var(--rojo);
+            padding: .7rem 1rem; border-radius: 4px; margin-bottom: .5rem; font-size: .85rem; }
+  .aviso { background: #fffbeb; border-left: 4px solid var(--ambar);
+           padding: .7rem 1rem; border-radius: 4px; margin-bottom: .5rem; font-size: .85rem; }
+  .ok-msg { background: #f0fdf4; border-left: 4px solid var(--verde);
+            padding: .7rem 1rem; border-radius: 4px; font-size: .85rem; }
+  .aclaracion { font-size: .78rem; color: #7f1d1d; font-style: italic; }
+  
+  /* Badges */
+  .badge { display: inline-block; padding: .1rem .45rem; border-radius: 999px;
+           font-size: .68rem; font-weight: 600; text-transform: uppercase; white-space: nowrap; }
+  .badge.rojo { background: #fee2e2; color: #991b1b; }
+  .badge.ambar { background: #fef3c7; color: #92400e; }
+  .badge.verde { background: #dcfce7; color: #166534; }
+  
+  /* Navegación por Pestañas */
+  .tabs { display: flex; gap: 0.25rem; margin-bottom: 1rem; border-bottom: 2px solid var(--borde); flex-wrap: wrap; }
+  .tab-btn { background: transparent; border: none; border-bottom: 3px solid transparent;
+             padding: .6rem 1rem; font-size: .9rem; font-weight: 600; color: #64748b;
+             cursor: pointer; transition: .2s; border-radius: 4px 4px 0 0; }
+  .tab-btn:hover { background: var(--gris); color: var(--azul); }
+  .tab-btn.active { border-bottom-color: var(--azul); color: var(--azul); background: var(--azul-claro); }
+  
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; animation: fadeIn .2s ease-in-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Otros */
+  .grupo-titulo { font-size: 1.1rem; font-weight: 700; color: var(--azul);
+                  margin: 1.5rem 0 .75rem; padding-bottom: .4rem;
+                  border-bottom: 2px solid var(--azul-claro); }
+  .info-grupo { font-size: .82rem; color: #64748b; margin-bottom: 1rem; }
+  .periodos-faltantes { color: #dc2626; font-weight: 600; }
+  .periodos-ok { color: #16a34a; }
+  .global-resumen { background: var(--azul); color: #fff; border-radius: 8px;
+                    padding: 1rem 1.25rem; margin-bottom: 1.5rem; font-size: .9rem; }
+  .global-resumen strong { font-size: 1.05rem; }
+  .pendiente-item { padding: .5rem 0; border-bottom: 1px solid var(--gris); font-size: .85rem; }
+  .pendiente-item:last-child { border-bottom: 0; }
+  .pendiente-materia { display: inline-block; background: #fef3c7; color: #92400e;
+                       padding: .1rem .4rem; border-radius: 4px; font-size: .75rem;
+                       margin: .15rem .25rem .15rem 0; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Análisis de Notas — I.E. Madre Laura</h1>
+    <div class="sub">Carga de planillas por período · Grupos 601–1102</div>
+  </div>
+</header>
+
+<main>
+
+  <div class="card">
+    <h2>1. Período actual</h2>
+    <div class="row">
+      <label for="periodo">¿En qué período estamos?</label>
+      <select id="periodo">
+        <option value="1">Período 1</option>
+        <option value="2">Período 2</option>
+        <option value="3">Período 3</option>
+        <option value="4">Período 4</option>
+      </select>
+      <span id="periodoHint" style="font-size:.8rem;color:#64748b;"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2. Cargar planillas Excel</h2>
+    <p style="font-size:.85rem;color:#475569;margin-top:0;">
+      Arrastra los archivos .xlsx. Puedes seleccionar <strong>múltiples períodos y múltiples grupos</strong> a la vez.
+    </p>
+    <div id="dropzone">
+      <p style="margin:0 0 .5rem;"><strong>Arrastra aquí</strong> los archivos Excel</p>
+      <p style="margin:0;font-size:.8rem;">o haz clic para buscarlos en tu PC</p>
+      <input type="file" id="fileInput" accept=".xlsx,.xls" multiple class="hidden">
+    </div>
+    <div id="fileList" style="margin-top:.75rem;font-size:.85rem;"></div>
+  </div>
+
+  <div id="resultados" class="hidden">
+    <!-- NAVEGACIÓN -->
+    <div style="margin-top: 2rem; margin-bottom: .5rem;">
+      <select id="grupoSelect" class="primary" style="font-size:1rem; font-weight:700; padding:.6rem; width:100%; max-width:300px; border:2px solid var(--azul); color:var(--azul);">
+        <!-- Opciones inyectadas por JS -->
+      </select>
+    </div>
+
+    <div class="tabs" id="tabsMenu">
+      <button class="tab-btn active" data-tab="tab-resumen">Resumen</button>
+      <button class="tab-btn" data-tab="tab-alertas">Alertas Críticas</button>
+      <button class="tab-btn" data-tab="tab-pendientes">Notas Pendientes</button>
+      <button class="tab-btn" data-tab="tab-planilla">Planilla Acumulada</button>
+      <button class="tab-btn" data-tab="tab-proyeccion">Proyección a P4</button>
+    </div>
+
+    <div id="contenidoGrupo"></div>
+  </div>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+/* ============================================================
+   CONSTANTES Y ESTADO
+   ============================================================ */
+const MATERIAS_SECUNDARIA = [
+  "Biologia","Ciencias Sociales","Constitución Política y Democracia",
+  "Educación Artística","Educación Ética y Valores","Educación Física",
+  "Educación Religiosa","Inglés","Lengua Castellana","Matemáticas",
+  "Química","Tecnología e Informática"
+];
+const MATERIAS_MEDIA = [
+  "Ciencias Económicas","Ciencias Sociales","Educación Artística",
+  "Educación Ética y Valores","Educación Física","Educación Religiosa",
+  "Filosofía","Física","Inglés","Lengua Castellana","Matemáticas",
+  "Química","Tecnología e Informática"
+];
+const NOTA_MIN = 6.5, NOTA_BAJO = 6.5, NOTA_ALTO = 8.0, NOTA_SUP = 9.0;
+
+let archivosPorGrupo = {}; 
+let grupoActivo = null;
+
+const $ = (id) => document.getElementById(id);
+
+/* ============================================================
+   EVENTOS Y CONFIG
+   ============================================================ */
+function actualizarHintPeriodo() {
+  const p = +$("periodo").value;
+  const msg = p < 4
+    ? `→ Promedio dividido entre ${p}. Se calculará "qué necesita" para los ${4-p} período(s) restante(s).`
+    : "→ Resultado final del año. Sin cálculo de proyección.";
+  $("periodoHint").textContent = msg;
+}
+$("periodo").addEventListener("change", () => {
+  actualizarHintPeriodo();
+  if (grupoActivo) renderizarGrupo();
+});
+actualizarHintPeriodo();
+
+// Navegación de pestañas
+$("tabsMenu").addEventListener("click", (e) => {
+  if (!e.target.classList.contains("tab-btn")) return;
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+  e.target.classList.add("active");
+  const tabId = e.target.getAttribute("data-tab");
+  if ($(tabId)) $(tabId).classList.add("active");
+});
+
+// Cambio de grupo
+$("grupoSelect").addEventListener("change", (e) => {
+  grupoActivo = e.target.value;
+  renderizarGrupo();
+});
+
+/* ============================================================
+   DROPZONE
+   ============================================================ */
+const dz = $("dropzone"), fi = $("fileInput");
+dz.addEventListener("click", () => fi.click());
+dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("hover"); });
+dz.addEventListener("dragleave", () => dz.classList.remove("hover"));
+dz.addEventListener("drop", e => { e.preventDefault(); dz.classList.remove("hover"); manejarArchivos(e.dataTransfer.files); });
+fi.addEventListener("change", () => manejarArchivos(fi.files));
+
+async function manejarArchivos(files) {
+  const lista = $("fileList");
+  archivosPorGrupo = {};
+  lista.innerHTML = "";
+
+  for (const file of files) {
+    if (!/\.(xlsx|xls)$/i.test(file.name)) {
+      lista.innerHTML += `<div style="color:#dc2626;">⚠️ ${file.name}: no es Excel</div>`;
+      continue;
+    }
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const parsed = parsearWorkbook(wb, file.name);
+      if (!parsed) {
+        lista.innerHTML += `<div style="color:#d97706;">⚠️ ${file.name}: formato no reconocido</div>`;
+        continue;
+      }
+      const g = parsed.grupo;
+      if (!archivosPorGrupo[g]) archivosPorGrupo[g] = {};
+      if (archivosPorGrupo[g][parsed.periodo]) {
+        lista.innerHTML += `<div style="color:#d97706;">⚠️ ${file.name}: período ${parsed.periodo} duplicado (se conserva el primero)</div>`;
+        continue;
+      }
+      archivosPorGrupo[g][parsed.periodo] = parsed;
+      lista.innerHTML += `<div style="color:#16a34a;">✅ ${file.name} → Grupo ${g} · Período ${parsed.periodo} · ${parsed.notas.length} estudiantes</div>`;
+    } catch (e) {
+      lista.innerHTML += `<div style="color:#dc2626;">❌ ${file.name}: ${e.message}</div>`;
+    }
+  }
+
+  const grupos = Object.keys(archivosPorGrupo);
+  if (grupos.length) {
+    // Ordenar numéricamente (601, 602, 1001)
+    grupos.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const sel = $("grupoSelect");
+    sel.innerHTML = grupos.map(g => `<option value="${g}">Grupo ${g}</option>`).join("");
+    grupoActivo = grupos[0];
+    
+    $("resultados").classList.remove("hidden");
+    renderizarGrupo();
+  }
+}
+
+/* ============================================================
+   PARSER
+   ============================================================ */
+function parsearWorkbook(wb, filename) {
+  let sheetName = wb.SheetNames.find(n => /^\d{3,4}$/.test(n.trim())) || wb.SheetNames[0];
+  const ws = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+
+  let meta = { periodo: null, grupo: null, sede: null, ano: null, sheet: sheetName };
+  for (let i = 0; i < Math.min(10, rows.length); i++) {
+    const r = rows[i]; if (!r) continue;
+    const a = String(r[0] ?? "").toUpperCase();
+    if (a.includes("PERIODO")) meta.periodo = num(r[1]);
+    if (a.includes("GRUPO"))   meta.grupo   = String(r[1] ?? "").trim();
+    if (a.includes("SEDE"))    meta.sede    = String(r[1] ?? "").trim();
+    if (a.includes("AÑO") || a.includes("ANO")) meta.ano = num(r[1]);
+  }
+
+  if (!meta.periodo) {
+    const m = filename.match(/[_\-\s]per(?:iodo)?[_\-\s]?(\d)/i) || filename.match(/[_\-\s]p(\d)(?:[_\-\s.]|$)/i);
+    if (m) meta.periodo = +m[1];
+  }
+  if (!meta.grupo) {
+    const m = filename.match(/(\d{3,4})/);
+    if (m) meta.grupo = m[1];
+  }
+
+  const headerIdx = rows.findIndex(r => r && String(r[0] ?? "").includes("Identificación"));
+  if (headerIdx === -1) return null;
+  const header = rows[headerIdx].map(c => String(c ?? "").trim());
+  const esMedia = header.includes("Filosofía") || header.includes("Física") || header.includes("Ciencias Económicas");
+  const materiasEsperadas = esMedia ? MATERIAS_MEDIA : MATERIAS_SECUNDARIA;
+
+  const colId = header.indexOf("Identificación");
+  const colNom = header.indexOf("Estudiante");
+  const colMat = {};
+  for (const m of materiasEsperadas) {
+    const idx = header.indexOf(m);
+    if (idx >= 0) colMat[m] = idx;
+  }
+
+  const notas = [];
+  let i = headerIdx + 1;
+  for (; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[colId]) break;
+    const id = String(r[colId]).trim();
+    if (!id || id.toLowerCase() === "nan") break;
+    const notasEst = {};
+    for (const [m, idx] of Object.entries(colMat)) notasEst[m] = num(r[idx]);
+    notas.push({
+      id,
+      nombre: String(r[colNom] ?? "").replace(/\s+/g," ").trim(),
+      notas: notasEst
+    });
+  }
+
+  const inas = [];
+  let inasHeaderIdx = -1;
+  for (let j = i; j < rows.length; j++) {
+    if (rows[j] && String(rows[j][0] ?? "").includes("Identificación")) {
+      inasHeaderIdx = j; break;
+    }
+  }
+  if (inasHeaderIdx >= 0) {
+    const headerIn = rows[inasHeaderIdx].map(c => String(c ?? "").trim());
+    const colMatIn = {};
+    for (const m of materiasEsperadas) {
+      const idx = headerIn.indexOf(m);
+      if (idx >= 0) colMatIn[m] = idx;
+    }
+    for (let j = inasHeaderIdx + 1; j < rows.length; j++) {
+      const r = rows[j];
+      if (!r || !r[colId]) continue;
+      const id = String(r[colId]).trim();
+      if (!id || id.toLowerCase() === "nan") continue;
+      const inasEst = {};
+      for (const [m, idx] of Object.entries(colMatIn)) inasEst[m] = num(r[idx]);
+      inas.push({ id, nombre: String(r[colNom] ?? "").trim(), inas: inasEst });
+    }
+  }
+
+  if (!notas.length) return null;
+  if (!meta.periodo) meta.periodo = 1;
+  if (!meta.grupo) meta.grupo = "?";
+  return {
+    grupo: meta.grupo, periodo: meta.periodo, meta, notas, inas, esMedia,
+    materias: esMedia ? MATERIAS_MEDIA : MATERIAS_SECUNDARIA
+  };
+}
+
+function num(v) {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return isNaN(n) ? null : n;
+}
+
+/* ============================================================
+   ANÁLISIS
+   ============================================================ */
+function analizarGrupo(grupo, periodosData, periodoActual) {
+  const periodosDisponibles = Object.keys(periodosData).map(Number).sort((a,b)=>a-b);
+  const periodosRequeridos = [];
+  for (let p = 1; p <= periodoActual; p++) periodosRequeridos.push(p);
+  const periodosFaltantes = periodosRequeridos.filter(p => !periodosDisponibles.includes(p));
+
+  const primero = periodosData[periodosDisponibles[0]];
+  const esMedia = primero.esMedia;
+  const materias = esMedia ? MATERIAS_MEDIA : MATERIAS_SECUNDARIA;
+
+  const estMap = new Map();
+  for (const p of periodosDisponibles) {
+    for (const e of periodosData[p].notas) {
+      if (!estMap.has(e.id)) estMap.set(e.id, { id: e.id, nombre: e.nombre, porPeriodo: {} });
+      estMap.get(e.id).porPeriodo[p] = e.notas;
+    }
+  }
+
+  const materiasVaciasPorPeriodo = {};
+  for (const p of periodosDisponibles) {
+    const vacias = materias.filter(m =>
+      periodosData[p].notas.length > 0 &&
+      periodosData[p].notas.every(e => e.notas[m] === 0 || e.notas[m] === null)
+    );
+    if (vacias.length) materiasVaciasPorPeriodo[p] = vacias;
+  }
+
+  const estudiantes = [];
+  for (const [id, info] of estMap) {
+    const acumuladas = {};
+    const pendientes = [];
+    for (const m of materias) {
+      const vals = [];
+      const pendPeriodos = [];
+      for (const p of periodosDisponibles) {
+        const v = info.porPeriodo[p]?.[m];
+        if (v !== null && v !== undefined) {
+          vals.push(v);
+          if (v === 0) pendPeriodos.push(p);
+        }
+      }
+      const suma = vals.reduce((a,b)=>a+b, 0);
+      
+      // PROMEDIO CORRECTO: suma dividida entre el período actual (no la cantidad de notas individuales)
+      // Ej: si estamos en P2, se divide entre 2.
+      acumuladas[m] = vals.length ? suma / periodoActual : null;
+      
+      acumuladas[m + "__suma"] = suma;
+      acumuladas[m + "__n"] = vals.length;
+      if (pendPeriodos.length) pendientes.push({ materia: m, periodos: pendPeriodos });
+    }
+
+    const perdidas = materias.filter(m => acumuladas[m] !== null && acumuladas[m] < NOTA_MIN);
+    const aprobadas = materias.filter(m => acumuladas[m] !== null && acumuladas[m] >= NOTA_MIN);
+    const notasDisp = materias.map(m => acumuladas[m]).filter(v => v !== null);
+    const todasAltas = notasDisp.length > 0 && notasDisp.every(v => v >= NOTA_ALTO);
+    const promGeneral = notasDisp.length ? notasDisp.reduce((a,b)=>a+b,0)/notasDisp.length : null;
+
+    let estado;
+    const numPerdidas = perdidas.length;
+    if (numPerdidas >= 3) estado = periodoActual < 4 ? "riesgo" : "perdio";
+    else if (numPerdidas >= 1) estado = "leve";
+    else estado = "ok";
+
+    estudiantes.push({
+      id, nombre: info.nombre, acumuladas, perdidas, aprobadas, pendientes,
+      numPerdidas, todasAltas, promGeneral, estado, porPeriodo: info.porPeriodo
+    });
+  }
+
+  if (periodoActual < 4) {
+    const periodosRestantes = 4 - periodoActual;
+    for (const e of estudiantes) {
+      e.proyeccion = {};
+      for (const m of materias) {
+        const suma = e.acumuladas[m + "__suma"] || 0;
+        const n = e.acumuladas[m + "__n"] || 0;
+        if (n === 0) { e.proyeccion[m] = null; continue; }
+        
+        // Formula: (6.5 * 4) - suma_actual = 26 - suma
+        const falta = 26 - suma;
+        const necesarioPorPeriodo = falta / periodosRestantes;
+        e.proyeccion[m] = {
+          suma, n, falta,
+          promedioNecesario: necesarioPorPeriodo,
+          alcanzable: necesarioPorPeriodo <= 10.0,
+          yaAprobada: e.acumuladas[m] !== null && e.acumuladas[m] >= NOTA_MIN && necesarioPorPeriodo <= 1.0
+        };
+      }
+    }
+  }
+
+  return {
+    grupo, esMedia, materias, periodoActual, periodosDisponibles,
+    periodosRequeridos, periodosFaltantes, materiasVaciasPorPeriodo, estudiantes
+  };
+}
+
+/* ============================================================
+   RENDERIZADO
+   ============================================================ */
+function renderizarGrupo() {
+  if (!grupoActivo) return;
+  const periodoActual = +$("periodo").value;
+  const a = analizarGrupo(grupoActivo, archivosPorGrupo[grupoActivo], periodoActual);
+  const cont = $("contenidoGrupo");
+  const p = a.periodoActual;
+  const etiquetaPerdiendo = p < 4 ? "Van perdiendo (en riesgo)" : "Perdieron el año";
+
+  const perdiendo = a.estudiantes.filter(e => e.estado === "riesgo" || e.estado === "perdio").length;
+  const enRiesgoLeve = a.estudiantes.filter(e => e.estado === "leve").length;
+  const conPendientes = a.estudiantes.filter(e => e.pendientes.length > 0).length;
+  const destacados = a.estudiantes.filter(e => e.todasAltas).length;
+  const totalMateriasVacias = Object.values(a.materiasVaciasPorPeriodo).reduce((s,arr)=>s+arr.length,0);
+
+  let html = "";
+
+  // --- TAB 1: RESUMEN ---
+  html += `
+  <div id="tab-resumen" class="tab-pane active">
+    <div class="info-grupo" style="margin-top:1rem;">
+      ${a.esMedia ? "Media (10°–11°)" : "Secundaria (6°–9°)"} · ${a.estudiantes.length} estudiantes ·
+      Períodos cargados: ${a.periodosDisponibles.join(", ") || "—"}
+      ${a.periodosFaltantes.length
+        ? `<span class="periodos-faltantes"> · ⚠️ Faltan: ${a.periodosFaltantes.join(", ")}</span>`
+        : `<span class="periodos-ok"> · ✅ Todos los períodos requeridos</span>`}
+    </div>
+    <div class="card">
+      <h2>Métricas del grupo ${a.grupo}</h2>
+      <div class="metricas">
+        <div class="metrica"><div class="num azul">${a.estudiantes.length}</div><div class="lbl">Estudiantes</div></div>
+        <div class="metrica"><div class="num rojo">${perdiendo}</div><div class="lbl">${etiquetaPerdiendo}</div></div>
+        <div class="metrica"><div class="num ambar">${enRiesgoLeve}</div><div class="lbl">Con 1–2 materias perdidas</div></div>
+        <div class="metrica"><div class="num ambar">${conPendientes}</div><div class="lbl">Con notas pendientes (0)</div></div>
+        <div class="metrica"><div class="num verde">${destacados}</div><div class="lbl">Destacados (todas ≥ 8.0)</div></div>
+        <div class="metrica"><div class="num rojo">${totalMateriasVacias}</div><div class="lbl">Materias sin subir notas</div></div>
+      </div>
+    </div>
+  </div>`;
+
+  // --- TAB 2: ALERTAS CRÍTICAS ---
+  let alertasHtml = "";
+  for (const [per, mats] of Object.entries(a.materiasVaciasPorPeriodo)) {
+    alertasHtml += `<div class="aviso"><strong>⚠️ Período ${per}:</strong> el profesor no ha subido notas en <strong>${mats.join(", ")}</strong> (todas las casillas en 0).</div>`;
+  }
+
+  const perdiendoEst = a.estudiantes.filter(e => e.estado === "riesgo" || e.estado === "perdio");
+  if (perdiendoEst.length) {
+    const lista = perdiendoEst.map(e => {
+      const conPend = e.pendientes.length > 0;
+      const aclar = conPend ? ` <span class="aclaracion">(⚠️ sin notas completas en: ${e.pendientes.map(x=>x.materia).join(", ")})</span>` : "";
+      return `<li><strong>${e.nombre}</strong> — ${e.numPerdidas} materias perdidas: ${e.perdidas.join(", ")}${aclar}</li>`;
+    }).join("");
+    alertasHtml += `<div class="alerta"><strong>🚨 ${etiquetaPerdiendo}:</strong><ul style="margin:.4rem 0 0 1.2rem;padding:0;">${lista}</ul></div>`;
+  }
+
+  if (!alertasHtml) alertasHtml = `<div class="ok-msg">✅ Sin alertas críticas.</div>`;
+  
+  html += `
+  <div id="tab-alertas" class="tab-pane">
+    <div class="card" style="margin-top:1rem;">
+      <h2>Alertas Críticas del grupo ${a.grupo}</h2>
+      ${alertasHtml}
+    </div>
+  </div>`;
+
+  // --- TAB 3: NOTAS PENDIENTES ---
+  let pendHtml = "";
+  const estConPend = a.estudiantes.filter(e => e.pendientes.length > 0);
+  if (estConPend.length === 0) {
+    pendHtml = `<div class="ok-msg">✅ Ningún estudiante tiene notas en 0.</div>`;
+  } else {
+    pendHtml = `<div>`;
+    for (const e of estConPend) {
+      const materiasTags = e.pendientes.map(x => {
+        const pers = x.periodos.map(pp => `P${pp}`).join(", ");
+        return `<span class="pendiente-materia">${x.materia} · ${pers}</span>`;
+      }).join("");
+      const estadoBadge = (e.estado === "riesgo" || e.estado === "perdio")
+        ? `<span class="badge rojo">${e.estado === "perdio" ? "Perdió" : "En riesgo"}</span>`
+        : e.estado === "leve" ? `<span class="badge ambar">1–2 perdidas</span>` : `<span class="badge verde">OK</span>`;
+      pendHtml += `<div class="pendiente-item"><strong>${e.nombre}</strong> ${estadoBadge}<br>${materiasTags}</div>`;
+    }
+    pendHtml += `</div>`;
+  }
+  
+  html += `
+  <div id="tab-pendientes" class="tab-pane">
+    <div class="card" style="margin-top:1rem;">
+      <h2>Notas pendientes por estudiante (${estConPend.length})</h2>
+      <p style="font-size:.82rem;color:#64748b;margin-top:0;">Estudiantes con al menos una nota en 0. Se listan materia y período donde falta la nota.</p>
+      ${pendHtml}
+    </div>
+  </div>`;
+
+  // --- TAB 4: PLANILLA ---
+  let th = `<tr><th>#</th><th>Estudiante</th>${a.materias.map(m=>`<th>${m}</th>`).join("")}<th>Prom.</th><th>Estado</th></tr>`;
+  let tb = "";
+  a.estudiantes.forEach((e, i) => {
+    const celdas = a.materias.map(m => {
+      const v = e.acumuladas[m];
+      if (v === null) return `<td>—</td>`;
+      const pend = e.pendientes.find(x => x.materia === m);
+      let cls = "";
+      if (pend) cls = "pendiente";
+      else if (v < NOTA_BAJO) cls = "bajo";
+      else if (v >= NOTA_SUP) cls = "superior";
+      else if (v >= NOTA_ALTO) cls = "alto";
+      else cls = "basico";
+      const mark = pend ? `${v.toFixed(2)} ⚠️` : v.toFixed(2);
+      return `<td class="${cls}">${mark}</td>`;
+    }).join("");
+    const badge = e.estado === "perdio" ? `<span class="badge rojo">Perdió</span>`
+      : e.estado === "riesgo" ? `<span class="badge rojo">En riesgo</span>`
+      : e.estado === "leve" ? `<span class="badge ambar">1–2 perdidas</span>`
+      : `<span class="badge verde">OK</span>`;
+    tb += `<tr><td>${i+1}</td><td class="nombre">${e.nombre}</td>${celdas}<td><strong>${e.promGeneral?.toFixed(2) ?? "—"}</strong></td><td>${badge}</td></tr>`;
+  });
+
+  html += `
+  <div id="tab-planilla" class="tab-pane">
+    <div class="card" style="margin-top:1rem; padding:0.5rem;">
+      <div class="tabla-wrap">
+        <table><thead>${th}</thead><tbody>${tb}</tbody></table>
+      </div>
+    </div>
+  </div>`;
+
+  // --- TAB 5: PROYECCIÓN ---
+  if (p < 4) {
+    let pth = `<tr><th>Estudiante</th><th>Materia</th><th>Acumulado</th><th>Necesita</th><th>Estado</th></tr>`;
+    let ptb = "";
+    a.estudiantes.forEach(e => {
+      if (!e.proyeccion) return;
+      for (const m of a.materias) {
+        const pr = e.proyeccion[m];
+        if (!pr || pr.yaAprobada) continue;
+        if (!pr.alcanzable) {
+          ptb += `<tr><td class="nombre">${e.nombre}</td><td>${m}</td><td>${e.acumuladas[m]?.toFixed(2) ?? "—"}</td><td><span class="badge rojo">Imposible</span></td><td>No alcanza ni con 10.0</td></tr>`;
+        } else if (e.acumuladas[m] !== null && e.acumuladas[m] < NOTA_MIN) {
+          ptb += `<tr><td class="nombre">${e.nombre}</td><td>${m}</td><td>${e.acumuladas[m].toFixed(2)}</td><td><strong>${pr.promedioNecesario.toFixed(2)}</strong></td><td>Debe esforzarse</td></tr>`;
+        }
+      }
+    });
+    
+    html += `
+    <div id="tab-proyeccion" class="tab-pane">
+      <div class="card" style="margin-top:1rem; padding:0.5rem;">
+        <p style="font-size:.82rem;color:#64748b;margin:.5rem;">
+          Solo se listan materias que <strong>aún se pueden salvar</strong>. "Necesita" = promedio mínimo requerido en los ${4-p} período(s) restante(s).
+        </p>
+        ${ptb ? `<div class="tabla-wrap"><table><thead>${pth}</thead><tbody>${ptb}</tbody></table></div>` : `<div class="ok-msg" style="margin:.5rem;">✅ No hay materias en riesgo recuperables.</div>`}
+      </div>
+    </div>`;
+  } else {
+    html += `<div id="tab-proyeccion" class="tab-pane"><div class="card" style="margin-top:1rem;"><div class="ok-msg">El año ya terminó (Período 4). No hay proyección.</div></div></div>`;
+  }
+
+  cont.innerHTML = html;
+  
+  // Mantiene la pestaña activa al cambiar de grupo o de período
+  const activeTab = document.querySelector(".tab-btn.active");
+  if (activeTab) {
+    const tabId = activeTab.getAttribute("data-tab");
+    if ($(tabId)) $(tabId).classList.add("active");
+  }
+}
+</script>
+</body>
+</html>
