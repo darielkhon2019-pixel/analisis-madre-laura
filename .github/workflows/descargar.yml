@@ -1,1 +1,35 @@
+name: Descargar Notas
 
+on:
+  workflow_dispatch: # Permite ejecutarlo manualmente desde un botón
+
+jobs:
+  descargar:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Necesario para guardar los Excel en el repo
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Instalar dependencias
+        run: pip install requests
+
+      - name: Ejecutar script de descarga
+        env:
+          COOKIE_MADRE_LAURA: ${{ secrets.COOKIE_MADRE_LAURA }}
+        run: python descargar_excel.py
+
+      - name: Guardar Excel en el repositorio
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git add data/raw/*.xlsx
+          git commit -m "Actualización automática de notas [skip ci]" || echo "No hay cambios nuevos"
+          git push
