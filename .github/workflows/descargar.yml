@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Descargar el repositorio
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Trae todo el historial para evitar problemas
 
       - name: Configurar Python
         uses: actions/setup-python@v5
@@ -32,4 +34,8 @@ jobs:
           git config user.email "actions@github.com"
           git add data/raw/*.xlsx
           git commit -m "Actualización automática de notas [skip ci]" || echo "No hay cambios nuevos"
+          
+          # LA SOLUCIÓN ESTÁ AQUÍ:
+          # Traemos los cambios remotos y hacemos rebase antes de subir
+          git pull --rebase origin main
           git push
