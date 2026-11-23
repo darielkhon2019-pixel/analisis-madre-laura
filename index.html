@@ -77,6 +77,7 @@
   .badge.rojo { background: #fee2e2; color: #991b1b; }
   .badge.ambar { background: #fef3c7; color: #92400e; }
   .badge.verde { background: #dcfce7; color: #166534; }
+  .badge.azul { background: #dbeafe; color: #1e40af; }
   
   /* Navegación por Pestañas */
   .tabs { display: flex; gap: 0.25rem; margin-bottom: 1rem; border-bottom: 2px solid var(--borde); flex-wrap: wrap; }
@@ -91,15 +92,9 @@
   @keyframes fadeIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
 
   /* Otros */
-  .grupo-titulo { font-size: 1.1rem; font-weight: 700; color: var(--azul);
-                  margin: 1.5rem 0 .75rem; padding-bottom: .4rem;
-                  border-bottom: 2px solid var(--azul-claro); }
   .info-grupo { font-size: .82rem; color: #64748b; margin-bottom: 1rem; }
   .periodos-faltantes { color: #dc2626; font-weight: 600; }
   .periodos-ok { color: #16a34a; }
-  .global-resumen { background: var(--azul); color: #fff; border-radius: 8px;
-                    padding: 1rem 1.25rem; margin-bottom: 1.5rem; font-size: .9rem; }
-  .global-resumen strong { font-size: 1.05rem; }
   .pendiente-item { padding: .5rem 0; border-bottom: 1px solid var(--gris); font-size: .85rem; }
   .pendiente-item:last-child { border-bottom: 0; }
   .pendiente-materia { display: inline-block; background: #fef3c7; color: #92400e;
@@ -147,8 +142,7 @@
   <div class="card">
     <h2>2. Cargar planillas Excel</h2>
     <p style="font-size:.85rem;color:#475569;margin-top:0;">
-      La página intentará cargar los archivos automáticamente desde el servidor. 
-      Si falla o quieres probar con archivos locales, puedes arrastrarlos manualmente.
+      Carga automática o arrastra archivos locales.
     </p>
     
     <div id="statusAuto" style="margin-bottom: 1rem; font-size: .85rem; color: #475569;">
@@ -177,6 +171,8 @@
       <button class="tab-btn" data-tab="tab-pendientes">Notas Pendientes</button>
       <button class="tab-btn" data-tab="tab-planilla">Planilla Acumulada</button>
       <button class="tab-btn" data-tab="tab-proyeccion">Proyección a P4</button>
+      <!-- NUEVA PESTAÑA -->
+      <button class="tab-btn" data-tab="tab-nivelaciones">Nivelaciones Especiales</button>
     </div>
 
     <div id="contenidoGrupo"></div>
@@ -215,7 +211,7 @@ function actualizarHintPeriodo() {
   const p = +$("periodo").value;
   const msg = p < 4
     ? `→ Promedio dividido entre ${p}. Se calculará "qué necesita" para los ${4-p} período(s) restante(s).`
-    : "→ Resultado final del año. Sin cálculo de proyección.";
+    : "→ Resultado final del año. Cálculo de nivelaciones especiales activo.";
   $("periodoHint").textContent = msg;
 }
 $("periodo").addEventListener("change", () => {
@@ -263,12 +259,10 @@ async function cargarDatosAutomatico() {
 
   for (const g of grupos) {
     for (const p of periodos) {
-      // Asume que los archivos están en data/raw/ en el mismo nivel que index.html
       const url = `data/raw/Notas_grupo_${g}_per${p}.xlsx`;
       try {
-        // Usamos cache: 'no-store' para obligar al navegador a bajar la versión más reciente
         const res = await fetch(url, { cache: 'no-store' });
-        if (!res.ok) continue; // Si no existe el archivo, ignorar
+        if (!res.ok) continue;
         
         const buf = await res.arrayBuffer();
         const wb = XLSX.read(buf, { type: "array" });
@@ -297,7 +291,7 @@ async function cargarDatosAutomatico() {
     renderizarGrupo();
     status.innerHTML = `<span style="color:#16a34a;font-weight:bold;">✅ ${encontrados} archivos cargados automáticamente.</span>`;
   } else {
-    status.innerHTML = `<span style="color:#dc2626;font-weight:bold;">⚠️ No se encontraron archivos en el servidor. Asegúrate de haber ejecutado GitHub Actions.</span>`;
+    status.innerHTML = `<span style="color:#dc2626;font-weight:bold;">⚠️ No se encontraron archivos en el servidor. Asegúrate de haberlos subido.</span>`;
   }
 }
 
@@ -346,7 +340,6 @@ async function manejarArchivos(files) {
     grupos.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
     const sel = $("grupoSelect");
     sel.innerHTML = grupos.map(g => `<option value="${g}">Grupo ${g}</option>`).join("");
-    // Mantiene el grupo activo si ya existía, sino toma el primero
     if (!grupoActivo || !grupos.includes(grupoActivo)) grupoActivo = grupos[0];
     
     $("resultados").classList.remove("hidden");
@@ -497,9 +490,7 @@ function analizarGrupo(grupo, periodosData, periodoActual) {
       }
       const suma = vals.reduce((a,b)=>a+b, 0);
       
-      // PROMEDIO CORRECTO: suma dividida entre el período actual
       acumuladas[m] = vals.length ? suma / periodoActual : null;
-      
       acumuladas[m + "__suma"] = suma;
       acumuladas[m + "__n"] = vals.length;
       if (pendPeriodos.length) pendientes.push({ materia: m, periodos: pendPeriodos });
@@ -517,9 +508,12 @@ function analizarGrupo(grupo, periodosData, periodoActual) {
     else if (numPerdidas >= 1) estado = "leve";
     else estado = "ok";
 
+    // Identificar si aplica para nivelación (Exactamente 1 o 2 materias perdidas en P4)
+    const enNivelacion = (periodoActual === 4 && numPerdidas >= 1 && numPerdidas <= 2);
+
     estudiantes.push({
       id, nombre: info.nombre, acumuladas, perdidas, aprobadas, pendientes,
-      numPerdidas, todasAltas, promGeneral, estado, porPeriodo: info.porPeriodo
+      numPerdidas, todasAltas, promGeneral, estado, porPeriodo: info.porPeriodo, enNivelacion
     });
   }
 
@@ -532,7 +526,6 @@ function analizarGrupo(grupo, periodosData, periodoActual) {
         const n = e.acumuladas[m + "__n"] || 0;
         if (n === 0) { e.proyeccion[m] = null; continue; }
         
-        // Formula: (6.5 * 4) - suma_actual = 26 - suma
         const falta = 26 - suma;
         const necesarioPorPeriodo = falta / periodosRestantes;
         e.proyeccion[m] = {
@@ -709,6 +702,78 @@ function renderizarGrupo() {
     </div>`;
   } else {
     html += `<div id="tab-proyeccion" class="tab-pane"><div class="card" style="margin-top:1rem;"><div class="ok-msg">El año ya terminó (Período 4). No hay proyección.</div></div></div>`;
+  }
+
+  // --- TAB 6: NIVELACIONES ESPECIALES ---
+  if (p === 4) {
+    const estNiv = a.estudiantes.filter(e => e.enNivelacion);
+    let nivHtml = "";
+    
+    if (estNiv.length > 0) {
+      // Calcular métricas generales de nivelación
+      let totalMateriasNiv = 0;
+      const conteoMaterias = {};
+      
+      estNiv.forEach(e => {
+        totalMateriasNiv += e.numPerdidas;
+        e.perdidas.forEach(m => {
+          conteoMaterias[m] = (conteoMaterias[m] || 0) + 1;
+        });
+      });
+
+      // Ordenar materias por cantidad de estudiantes (mayor a menor)
+      const materiasOrdenadas = Object.keys(conteoMaterias).sort((a,b) => conteoMaterias[b] - conteoMaterias[a]);
+
+      // Tabla 1: Estudiantes y sus materias
+      let t1 = `<tr><th>#</th><th>Estudiante</th><th>Materias a Nivelar</th><th>Total</th></tr>`;
+      estNiv.forEach((e, i) => {
+        const matsBadge = e.perdidas.map(m => `<span class="badge azul">${m}</span>`).join(" ");
+        t1 += `<tr><td>${i+1}</td><td class="nombre">${e.nombre}</td><td style="text-align:left;">${matsBadge}</td><td><strong>${e.numPerdidas}</strong></td></tr>`;
+      });
+
+      // Tabla 2: Resumen por asignatura
+      let t2 = `<tr><th>Asignatura</th><th>Estudiantes en Nivelación</th></tr>`;
+      materiasOrdenadas.forEach(m => {
+        t2 += `<tr><td class="nombre"><strong>${m}</strong></td><td style="font-size:1rem; color:var(--azul); font-weight:bold;">${conteoMaterias[m]}</td></tr>`;
+      });
+
+      nivHtml = `
+        <div class="metricas" style="margin-bottom: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+          <div class="metrica"><div class="num azul">${estNiv.length}</div><div class="lbl">Estudiantes en Nivelación</div></div>
+          <div class="metrica"><div class="num ambar">${totalMateriasNiv}</div><div class="lbl">Total Nivelaciones a Realizar</div></div>
+        </div>
+        
+        <h2 style="font-size:1rem; color:var(--azul); margin-top:2rem;">1. Estudiantes y sus materias pendientes</h2>
+        <div class="tabla-wrap" style="margin-bottom:2rem; max-height: 400px;">
+          <table><thead>${t1}</thead><tbody></tbody></table>
+        </div>
+
+        <h2 style="font-size:1rem; color:var(--azul); margin-top:2rem;">2. Resumen por asignatura</h2>
+        <div class="tabla-wrap" style="max-height: 400px;">
+          <table><thead>${t2}</thead><tbody></tbody></table>
+        </div>
+      `;
+    } else {
+      nivHtml = `<div class="ok-msg">✅ Ningún estudiante tiene 1 o 2 materias perdidas. No hay nivelaciones especiales este año.</div>`;
+    }
+
+    html += `
+    <div id="tab-nivelaciones" class="tab-pane">
+      <div class="card" style="margin-top:1rem;">
+        <h2>Nivelaciones Especiales (Período 4)</h2>
+        <p style="font-size:.82rem;color:#64748b;margin-top:0;">
+          Aplica para estudiantes con <strong>1 o 2 materias perdidas</strong>. Aquellos con 3 o más materias pierden el año directamente y no aplican.
+        </p>
+        ${nivHtml}
+      </div>
+    </div>`;
+  } else {
+    html += `
+    <div id="tab-nivelaciones" class="tab-pane">
+      <div class="card" style="margin-top:1rem;">
+        <div class="aviso">⚠️ Esta sección solo está disponible cuando el Período actual es <strong>4</strong>.</div>
+      </div>
+    </div>`;
   }
 
   cont.innerHTML = html;
