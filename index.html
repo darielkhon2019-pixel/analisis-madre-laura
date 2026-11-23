@@ -171,7 +171,6 @@
       <button class="tab-btn" data-tab="tab-pendientes">Notas Pendientes</button>
       <button class="tab-btn" data-tab="tab-planilla">Planilla Acumulada</button>
       <button class="tab-btn" data-tab="tab-proyeccion">Proyección a P4</button>
-      <!-- NUEVA PESTAÑA -->
       <button class="tab-btn" data-tab="tab-nivelaciones">Nivelaciones Especiales</button>
     </div>
 
@@ -489,16 +488,25 @@ function analizarGrupo(grupo, periodosData, periodoActual) {
         }
       }
       const suma = vals.reduce((a,b)=>a+b, 0);
-      
       acumuladas[m] = vals.length ? suma / periodoActual : null;
+      
+      // --- REDONDEO A 1 DECIMAL ---
+      acumuladas[m + "__redondeada"] = acumuladas[m] !== null ? Math.round(acumuladas[m] * 10) / 10 : null;
+      
       acumuladas[m + "__suma"] = suma;
       acumuladas[m + "__n"] = vals.length;
       if (pendPeriodos.length) pendientes.push({ materia: m, periodos: pendPeriodos });
     }
 
-    const perdidas = materias.filter(m => acumuladas[m] !== null && acumuladas[m] < NOTA_MIN);
-    const aprobadas = materias.filter(m => acumuladas[m] !== null && acumuladas[m] >= NOTA_MIN);
-    const notasDisp = materias.map(m => acumuladas[m]).filter(v => v !== null);
+    // Evalúa usando la nota redondeada (ej: 6.47 -> 6.5, así que NO es pérdida)
+    const perdidas = materias.filter(m => 
+      acumuladas[m + "__redondeada"] !== null && acumuladas[m + "__redondeada"] < NOTA_MIN
+    );
+    const aprobadas = materias.filter(m => 
+      acumuladas[m + "__redondeada"] !== null && acumuladas[m + "__redondeada"] >= NOTA_MIN
+    );
+    
+    const notasDisp = materias.map(m => acumuladas[m + "__redondeada"]).filter(v => v !== null);
     const todasAltas = notasDisp.length > 0 && notasDisp.every(v => v >= NOTA_ALTO);
     const promGeneral = notasDisp.length ? notasDisp.reduce((a,b)=>a+b,0)/notasDisp.length : null;
 
@@ -508,7 +516,6 @@ function analizarGrupo(grupo, periodosData, periodoActual) {
     else if (numPerdidas >= 1) estado = "leve";
     else estado = "ok";
 
-    // Identificar si aplica para nivelación (Exactamente 1 o 2 materias perdidas en P4)
     const enNivelacion = (periodoActual === 4 && numPerdidas >= 1 && numPerdidas <= 2);
 
     estudiantes.push({
@@ -532,7 +539,7 @@ function analizarGrupo(grupo, periodosData, periodoActual) {
           suma, n, falta,
           promedioNecesario: necesarioPorPeriodo,
           alcanzable: necesarioPorPeriodo <= 10.0,
-          yaAprobada: e.acumuladas[m] !== null && e.acumuladas[m] >= NOTA_MIN && necesarioPorPeriodo <= 1.0
+          yaAprobada: e.acumuladas[m + "__redondeada"] !== null && e.acumuladas[m + "__redondeada"] >= NOTA_MIN && necesarioPorPeriodo <= 1.0
         };
       }
     }
@@ -646,7 +653,7 @@ function renderizarGrupo() {
   let tb = "";
   a.estudiantes.forEach((e, i) => {
     const celdas = a.materias.map(m => {
-      const v = e.acumuladas[m];
+      const v = e.acumuladas[m + "__redondeada"]; // Muestra la nota redondeada
       if (v === null) return `<td>—</td>`;
       const pend = e.pendientes.find(x => x.materia === m);
       let cls = "";
@@ -682,11 +689,12 @@ function renderizarGrupo() {
       if (!e.proyeccion) return;
       for (const m of a.materias) {
         const pr = e.proyeccion[m];
+        const v = e.acumuladas[m + "__redondeada"];
         if (!pr || pr.yaAprobada) continue;
         if (!pr.alcanzable) {
-          ptb += `<tr><td class="nombre">${e.nombre}</td><td>${m}</td><td>${e.acumuladas[m]?.toFixed(2) ?? "—"}</td><td><span class="badge rojo">Imposible</span></td><td>No alcanza ni con 10.0</td></tr>`;
-        } else if (e.acumuladas[m] !== null && e.acumuladas[m] < NOTA_MIN) {
-          ptb += `<tr><td class="nombre">${e.nombre}</td><td>${m}</td><td>${e.acumuladas[m].toFixed(2)}</td><td><strong>${pr.promedioNecesario.toFixed(2)}</strong></td><td>Debe esforzarse</td></tr>`;
+          ptb += `<tr><td class="nombre">${e.nombre}</td><td>${m}</td><td>${v?.toFixed(2) ?? "—"}</td><td><span class="badge rojo">Imposible</span></td><td>No alcanza ni con 10.0</td></tr>`;
+        } else if (v !== null && v < NOTA_MIN) {
+          ptb += `<tr><td class="nombre">${e.nombre}</td><td>${m}</td><td>${v.toFixed(2)}</td><td><strong>${pr.promedioNecesario.toFixed(2)}</strong></td><td>Debe esforzarse</td></tr>`;
         }
       }
     });
@@ -710,19 +718,19 @@ function renderizarGrupo() {
     let nivHtml = "";
     
     if (estNiv.length > 0) {
-      // Calcular métricas generales de nivelación
       let totalMateriasNiv = 0;
-      const conteoMaterias = {};
+      const conteoMaterias = {}; // { "Matemáticas": [{nombre1}, {nombre2}], ... }
       
       estNiv.forEach(e => {
         totalMateriasNiv += e.numPerdidas;
         e.perdidas.forEach(m => {
-          conteoMaterias[m] = (conteoMaterias[m] || 0) + 1;
+          if (!conteoMaterias[m]) conteoMaterias[m] = [];
+          conteoMaterias[m].push(e.nombre);
         });
       });
 
       // Ordenar materias por cantidad de estudiantes (mayor a menor)
-      const materiasOrdenadas = Object.keys(conteoMaterias).sort((a,b) => conteoMaterias[b] - conteoMaterias[a]);
+      const materiasOrdenadas = Object.keys(conteoMaterias).sort((a,b) => conteoMaterias[b].length - conteoMaterias[a].length);
 
       // Tabla 1: Estudiantes y sus materias
       let t1 = `<tr><th>#</th><th>Estudiante</th><th>Materias a Nivelar</th><th>Total</th></tr>`;
@@ -731,10 +739,15 @@ function renderizarGrupo() {
         t1 += `<tr><td>${i+1}</td><td class="nombre">${e.nombre}</td><td style="text-align:left;">${matsBadge}</td><td><strong>${e.numPerdidas}</strong></td></tr>`;
       });
 
-      // Tabla 2: Resumen por asignatura
-      let t2 = `<tr><th>Asignatura</th><th>Estudiantes en Nivelación</th></tr>`;
+      // Tabla 2: Resumen por asignatura (CON NOMBRES)
+      let t2 = `<tr><th>Asignatura</th><th>Cant.</th><th>Estudiantes</th></tr>`;
       materiasOrdenadas.forEach(m => {
-        t2 += `<tr><td class="nombre"><strong>${m}</strong></td><td style="font-size:1rem; color:var(--azul); font-weight:bold;">${conteoMaterias[m]}</td></tr>`;
+        const nombres = conteoMaterias[m].join(", ");
+        t2 += `<tr>
+          <td class="nombre"><strong>${m}</strong></td>
+          <td style="font-size:1rem; color:var(--azul); font-weight:bold;">${conteoMaterias[m].length}</td>
+          <td style="text-align:left; white-space:normal; font-size:.75rem;">${nombres}</td>
+        </tr>`;
       });
 
       nivHtml = `
@@ -748,7 +761,7 @@ function renderizarGrupo() {
           <table><thead>${t1}</thead><tbody></tbody></table>
         </div>
 
-        <h2 style="font-size:1rem; color:var(--azul); margin-top:2rem;">2. Resumen por asignatura</h2>
+        <h2 style="font-size:1rem; color:var(--azul); margin-top:2rem;">2. Resumen por asignatura (Estudiantes en cada una)</h2>
         <div class="tabla-wrap" style="max-height: 400px;">
           <table><thead>${t2}</thead><tbody></tbody></table>
         </div>
